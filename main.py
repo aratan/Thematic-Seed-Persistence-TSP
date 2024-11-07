@@ -5,120 +5,101 @@ import os
 from gtts import gTTS
 import pygame
 import tempfile
-import time
 import json
 import random
+import re
+from functools import lru_cache
+from typing import List, Optional
 
 # Configuración del logger
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Función para cargar o crear la configuración de semillas temáticas
-def cargar_o_crear_seeds_config():
-    try:
-        with open('seeds_config.json', 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return {}
+class SeedManager:
+    def __init__(self, config_file: str = 'seeds_config.json'):
+        self.config_file = config_file
+        self.seeds_config = self.load_config()
 
-# Función para guardar la configuración de semillas temáticas
-def guardar_seeds_config(config):
-    with open('seeds_config.json', 'w') as file:
-        json.dump(config, file)
+    def load_config(self) -> dict:
+        try:
+            with open(self.config_file, 'r') as file:
+                return json.load(file)
+        except FileNotFoundError:
+            return {}
 
-# Función para obtener o generar una semilla para un tema
-def obtener_semilla_tema(tema, seeds_config):
-    if tema not in seeds_config:
-        seeds_config[tema] = random.randint(0, 2**32 - 1)
-        guardar_seeds_config(seeds_config)
-    return seeds_config[tema]
+    def save_config(self) -> None:
+        with open(self.config_file, 'w') as file:
+            json.dump(self.seeds_config, file, indent=4)
 
-# Función para cargar documentos de todos los archivos .txt en un directorio
-def cargar_documentos(directorio):
+    def get_seed(self, tema: str) -> int:
+        if not tema:
+            raise ValueError("El tema extraído está vacío.")
+        if tema not in self.seeds_config:
+            logging.info(f"Generando nueva semilla para el tema: {tema}")
+            self.seeds_config[tema] = random.randint(0, 2**32 - 1)
+            self.save_config()
+        return self.seeds_config[tema]
+
+class EmbeddingManager:
+    def __init__(self, model: str = "mxbai-embed-large"):
+        self.model = model
+        self.client = chromadb.Client()
+        self.collection = self.client.get_or_create_collection(name="docs")
+
+    @lru_cache(maxsize=100)
+    def generate_embedding(self, text: str) -> Optional[List[float]]:
+        try:
+            response = ollama.embeddings(model=self.model, prompt=text)
+            return response["embedding"]
+        except Exception as e:
+            logging.error(f"Error al generar embedding: {e}")
+            return None
+
+    def store_embedding(self, id: str, text: str, embedding: List[float]) -> None:
+        try:
+            self.collection.add(
+                ids=[id],
+                embeddings=[embedding],
+                documents=[text]
+            )
+        except Exception as e:
+            logging.error(f"Error al almacenar embedding: {e}")
+
+    def query_similar(self, query_embedding: List[float], n_results: int = 1) -> Optional[List[str]]:
+        try:
+            results = self.collection.query(query_embeddings=[query_embedding], n_results=n_results)
+            return results['documents'][0] if results['documents'] else None
+        except Exception as e:
+            logging.error(f"Error al consultar embeddings similares: {e}")
+            return None
+
+def cargar_documentos(directorio: str) -> List[str]:
     documentos = []
     try:
         for filename in os.listdir(directorio):
             if filename.endswith('.txt'):
                 with open(os.path.join(directorio, filename), 'r', encoding='utf-8') as file:
                     documentos.extend(file.readlines())
-        logging.info("Documentos cargados desde el directorio.")
+        logging.info(f"Se cargaron {len(documentos)} documentos desde el directorio.")
     except Exception as e:
         logging.error(f"Error al cargar documentos: {e}")
-    return [doc.strip() for doc in documentos]  # Limpia espacios en blanco
+    return [doc.strip() for doc in documentos if doc.strip()]
 
-# Función para cargar embeddings de los temas desde un archivo JSON
-def cargar_embeddings_temas():
+def extraer_tema(prompt: str) -> str:
+    match = re.match(r"^(.*?)(probabilidad|estudio|información|cuál|cómo|por qué|que)\b", prompt, re.IGNORECASE)
+    if match:
+        tema = match.group(1).strip()
+        logging.info(f"Tema extraído del prompt: {tema}")
+        return tema
+    return prompt.split()[0]
+
+def generar_respuesta(prompt: str, data: str, seed_manager: SeedManager, model: str = "llama3.2") -> Optional[str]:
     try:
-        with open('embeddings_temas.json', 'r', encoding='utf-8') as file:
-            temas_embeddings = json.load(file)
-        logging.info("Embeddings de temas cargados con éxito desde embeddings_temas.json.")
-        return temas_embeddings
-    except Exception as e:
-        logging.error(f"Error al cargar embeddings de temas: {e}")
-        return {}
-
-# Función para guardar embeddings de los temas en un archivo JSON
-def guardar_embeddings_temas(temas_embeddings):
-    try:
-        with open('embeddings_temas.json', 'w', encoding='utf-8') as file:
-            json.dump(temas_embeddings, file, ensure_ascii=False, indent=4)
-        logging.info("Embeddings de temas guardados con éxito en embeddings_temas.json.")
-    except Exception as e:
-        logging.error(f"Error al guardar embeddings de temas: {e}")
-
-# Función para generar incrustaciones para los documentos y los almacena en embeddings_temas.json
-def generar_incrustaciones_y_almacenar(documents, tema):
-    try:
-        embedding_tema = ollama.embeddings(model="mxbai-embed-large", prompt=tema)["embedding"]
-        temas_embeddings = cargar_embeddings_temas()
-        temas_embeddings[tema] = embedding_tema
-        guardar_embeddings_temas(temas_embeddings)
-        logging.info(f"Embedding para el tema '{tema}' generado y almacenado.")
-    except Exception as e:
-        logging.error(f"Error al generar o almacenar el embedding del tema: {e}")
-
-# Inicializar el cliente de ChromaDB
-client = chromadb.Client()
-
-# Función para generar y almacenar embeddings en ChromaDB
-def generar_incrustaciones_y_almacenar_chromadb(documents):
-    try:
-        collection = client.get_or_create_collection(name="docs")
-        for i, d in enumerate(documents):
-            response = ollama.embeddings(model="mxbai-embed-large", prompt=d)
-            embedding = response["embedding"]
-            collection.add(
-                ids=[str(i)],
-                embeddings=[embedding],
-                documents=[d]
-            )
-        logging.info("Embeddings generados y almacenados con éxito en ChromaDB.")
-        return collection
-    except Exception as e:
-        logging.error(f"Error al generar o almacenar embeddings: {e}")
-        return None
-
-# Función para recuperar un documento relevante usando embeddings
-def recuperar_documento_relevante(collection, prompt):
-    try:
-        response = ollama.embeddings(model="mxbai-embed-large", prompt=prompt)
-        embedding = response["embedding"]
-        results = collection.query(query_embeddings=[embedding], n_results=1)
-        if not results['documents']:
-            logging.warning("No se encontraron documentos relevantes.")
-            return None
-        data = results['documents'][0][0]
-        logging.info(f"Documento recuperado: {data}")
-        return data
-    except Exception as e:
-        logging.error(f"Error al recuperar el documento: {e}")
-        return None
-
-# Función para generar la respuesta usando el documento recuperado y TSP
-def generar_respuesta(prompt, data, tema, seeds_config):
-    try:
-        semilla = obtener_semilla_tema(tema, seeds_config)
+        tema = extraer_tema(prompt)
+        if not tema:
+            raise ValueError("El tema extraído está vacío.")
+        semilla = seed_manager.get_seed(tema)
         response = ollama.generate(
-            model="llama3.2", 
+            model=model,
             prompt=f"Usa estos datos: {data}. Responde en este prompt: {prompt}",
             options={"seed": semilla}
         )
@@ -128,40 +109,58 @@ def generar_respuesta(prompt, data, tema, seeds_config):
         logging.error(f"Error al generar la respuesta: {e}")
         return None
 
-# Función para convertir la respuesta en audio y reproducirla usando pygame
-def reproducir_respuesta_en_voz(respuesta):
+def reproducir_respuesta_en_voz(respuesta: str) -> None:
     try:
         tts = gTTS(respuesta, lang='es', slow=False)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
             tts.save(fp.name)
             audio_path = fp.name
+        
         pygame.mixer.init()
         pygame.mixer.music.load(audio_path)
         pygame.mixer.music.play()
         while pygame.mixer.music.get_busy():
-            time.sleep(0.1)
+            pygame.time.Clock().tick(10)
         pygame.mixer.quit()
+        
+        os.remove(audio_path)
         logging.info("Respuesta reproducida en voz con éxito.")
     except Exception as e:
         logging.error(f"Error al reproducir la respuesta en voz: {e}")
 
-# Función principal
-if __name__ == "__main__":
-    directorio = "datos"  # Cambia esta ruta según sea necesario
+def main():
+    directorio = "datos"
+    seed_manager = SeedManager()
+    embedding_manager = EmbeddingManager()
+
     documentos = cargar_documentos(directorio)
-    collection = generar_incrustaciones_y_almacenar_chromadb(documentos)
-    
-    # Cargar o crear la configuración de semillas temáticas
-    seeds_config = cargar_o_crear_seeds_config()
-    
-    tema = "cartas"  # Este es un ejemplo de tema; cambia según sea necesario
-    generar_incrustaciones_y_almacenar(documentos, tema)
 
-    if collection:
-        prompt = "Probabilidad de vida extraterrestre"
-        data = recuperar_documento_relevante(collection, prompt)
+    for i, doc in enumerate(documentos):
+        embedding = embedding_manager.generate_embedding(doc)
+        if embedding:
+            embedding_manager.store_embedding(str(i), doc, embedding)
 
-        if data:
-            respuesta = generar_respuesta(prompt, data, tema, seeds_config)
-            print("Respuesta generada:\n", respuesta)
-            reproducir_respuesta_en_voz(respuesta)
+    while True:
+        prompt = input("Ingrese su pregunta (o 'salir' para terminar): ")
+        if prompt.lower() == 'salir':
+            break
+
+        query_embedding = embedding_manager.generate_embedding(prompt)
+        
+        if query_embedding:
+            data = embedding_manager.query_similar(query_embedding)
+            
+            if data:
+                respuesta = generar_respuesta(prompt, data[0], seed_manager)
+                if respuesta:
+                    print("Respuesta generada:\n", respuesta)
+                    reproducir_respuesta_en_voz(respuesta)
+                else:
+                    print("No se pudo generar una respuesta.")
+            else:
+                print("No se encontraron documentos relevantes.")
+        else:
+            print("No se pudo generar el embedding para la consulta.")
+
+if __name__ == "__main__":
+    main()
