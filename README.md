@@ -59,8 +59,9 @@ TSP may be limited in scenarios requiring highly dynamic or creative responses, 
 ## 5. Conclusion
 Thematic Seed Persistence (TSP) is an effective method for enhancing response consistency in LLMs, particularly in applications requiring reliable, predictable outputs across specific thematic areas. Future research could explore automatic theme detection and dynamic seed adjustment based on real-time user feedback to further improve adaptability.
 
+![image](https://github.com/user-attachments/assets/a8fa24e1-e331-4525-9ff6-799ad5d86264)
 
-### victor arbiol
+##### victor arbiol
 
 
 
