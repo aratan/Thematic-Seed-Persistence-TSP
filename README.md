@@ -1,4 +1,3 @@
-# Seed-Consistency-Control
 
 # **Thematic Seed Persistence in Large Language Models: Enhancing Response Consistency through Contextual Seeding**
 
