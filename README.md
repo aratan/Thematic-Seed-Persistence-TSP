@@ -47,8 +47,6 @@ TSP is implemented in three main steps:
 ### 3.1 Experimental Setup
 We evaluated TSP by comparing response consistency across multiple queries related to specific themes such as "optimization," "security," and "natural language processing." User satisfaction and consistency were measured by analyzing response alignment with previously generated outputs for similar queries.
 
-### 3.2 Results expected
-Our results expected indicate that TSP significantly improved response consistency, reducing the observed variability in outputs for similar prompts by over 85%. Furthermore, user satisfaction scores increased by 40% when TSP was applied, underscoring the technique’s practical benefits.
 
 ## 4. Discussion
 ### 4.1 Advantages of Thematic Seed Persistence
