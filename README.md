@@ -40,13 +40,17 @@ We evaluated TSP by comparing response consistency across multiple queries relat
 
 ## 4. Discussion
 ### 4.1 Advantages of Thematic Seed Persistence
-Efficiency: TSP is a lightweight alternative to fine-tuning, requiring minimal computational resources. By reusing seeds, TSP significantly reduces the need for continuous model retraining, leading to cost-effective operations.
+#### Efficiency: 
+TSP is a lightweight alternative to fine-tuning, requiring minimal computational resources. By reusing seeds, TSP significantly reduces the need for continuous model retraining, leading to cost-effective operations.
 
-Scalability: As new themes emerge, they can be easily added to the seeds_config.json file. The ability to quickly introduce new topics without complex adjustments makes this approach highly scalable for a wide variety of use cases.
+#### Scalability: 
+As new themes emerge, they can be easily added to the seeds_config.json file. The ability to quickly introduce new topics without complex adjustments makes this approach highly scalable for a wide variety of use cases.
 
-Flexibility: TSP allows for granular control over response variability without altering the underlying model architecture. By adjusting seed values, users can fine-tune the balance between creativity and consistency, depending on the specific needs of the query.
+#### Flexibility: 
+TSP allows for granular control over response variability without altering the underlying model architecture. By adjusting seed values, users can fine-tune the balance between creativity and consistency, depending on the specific needs of the query.
 
-Community Collaboration: By sharing seed values within the user community, the model’s performance improves through collective input. A shared seed repository enables faster optimization by leveraging seeds that have already been successful in similar contexts, enhancing model performance and decreasing the computational cost.
+#### Community Collaboration: 
+By sharing seed values within the user community, the model’s performance improves through collective input. A shared seed repository enables faster optimization by leveraging seeds that have already been successful in similar contexts, enhancing model performance and decreasing the computational cost.
 
 ### 4.2 Limitations
 TSP may be limited in scenarios requiring highly dynamic or creative responses, where a fixed seed could hinder natural variability. Additionally, determining optimal seeds for each thematic area may require iterative testing and fine-tuning. However, with the right community input and constant sharing of successful seeds, this can be minimized.
